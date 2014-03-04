@@ -1,3 +1,4 @@
+.DS_Store
 *.py[cod]
 
 # C extensions
@@ -10,7 +11,6 @@ dist
 build
 eggs
 parts
-bin
 var
 sdist
 develop-eggs
