@@ -12,5 +12,27 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import argparse
+import sys
+
+from svg2nvg.parser import SVGParser
+from svg2nvg.generator import nanovg
+
+
+def convert_svg_file_to_nvg(filename):
+    generator = nanovg.NanoVGGenerator()
+    parser = SVGParser(generator)
+    parser.parse_file(filename)
+
+
+parser = argparse.ArgumentParser(
+    description='Convert SVG files to NVG source code')
+parser.add_argument('svg_path', help='path to a SVG file')
+
 def execute_from_command_line():
-    pass
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
+
+    args = parser.parse_args()
+    convert_svg_file_to_nvg(args.svg_path)
