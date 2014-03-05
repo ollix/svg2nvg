@@ -44,12 +44,16 @@ class Generator(object):
         pass
 
     def end(self):
+        pass
         print("\n".join(self.stmts))
 
     def end_element(self):
         pass
 
     def fill(self, **kwargs):
+        pass
+
+    def path_command(self, command, *args):
         pass
 
     def rect(self, **kwargs):
