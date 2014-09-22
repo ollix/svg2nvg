@@ -16,13 +16,12 @@ import argparse
 import sys
 
 from svg2nvg.parser import SVGParser
-from svg2nvg.generator import nanovg
 
 
 def convert_svg_file_to_nvg(filename):
-    generator = nanovg.NanoVGGenerator()
-    parser = SVGParser(generator)
+    parser = SVGParser()
     parser.parse_file(filename)
+    parser.print_result()
 
 
 parser = argparse.ArgumentParser(

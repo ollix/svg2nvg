@@ -12,14 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from svg2nvg import generator
+class Generator(object):
 
-
-class NanoVGGenerator(generator.Generator):
-
-    def __init__(self, context='context'):
-        super(NanoVGGenerator, self).__init__()
+    def __init__(self, stmts, context='context'):
         self.context = context
+        self.stmts = stmts
+
+    def __append_stmt(self, *args):
+        stmt = self.__gen_stmt(*args)
+        self.stmts.append(stmt)
 
     def __gen_color(self, color, opacity):
         if color == 'none' or not color or opacity == 0:
@@ -36,7 +37,7 @@ class NanoVGGenerator(generator.Generator):
         return 'nvgRGBA(%d, %d, %d, %d)' % (color[0], color[1], color[2],
                                             opacity)
 
-    def _gen_stmt(self, *args):
+    def __gen_stmt(self, *args):
         command = args[0]
         if len(args) == 1:
             stmt = 'nvg%s(%s);' % (command, self.context)
@@ -45,41 +46,57 @@ class NanoVGGenerator(generator.Generator):
             stmt = 'nvg%s(%s, %s);' % (command, self.context, ', '.join(args))
         return stmt
 
-    def begin_element(self):
-        self._append_stmt('BeginPath')
+    def __insert_stmt(self, keyword, stmt):
+        index = 0
+        for history_stmt in reversed(self.stmts):
+            if keyword in history_stmt:
+                break
+            index -= 1
+        index = len(self.stmts) + index
+        self.stmts.insert(index, stmt)
+
+    def begin_element(self, tag):
+        self.__append_stmt('BeginPath')
         self.previous_path_xy = (0, 0)
+
+    def begin_path_commands(self):
+        self.current_subpath = 0
         self.previous_path = None
+        self.previous_move_point = None
+
+    def circle(self, **kwargs):
+        stmt = self.__gen_stmt('Circle', kwargs['cx'], kwargs['cy'], kwargs['r'])
+        self.__insert_stmt('BeginPath', stmt)
+
+
+    def end_element(self, tag):
+        pass
+
+    def end_path_commands(self):
+        self.previous_path = None
+        if self.current_subpath % 2:
+            self.__append_stmt('PathWinding', 'NVG_HOLE')
 
     def fill(self, **kwargs):
         color = self.__gen_color(kwargs['fill'], kwargs['fill-opacity'])
         if color is not None:
-            self._append_stmt('FillColor', color)
-        self._append_stmt('Fill')
+            self.__append_stmt('FillColor', color)
+        self.__append_stmt('Fill')
 
     def path_command(self, command, *args):
-        # Converts relative coordinate to absolute coordinate.
-        if command.lower() == command:
+        # Converts relative coordinates to absolute coordinates.
+        if command.islower():
             previous_x = float(self.previous_path_xy[0])
             previous_y = float(self.previous_path_xy[1])
-            if command == 'c':
-                args = (previous_x + float(args[0]),
-                        previous_y + float(args[1]),
-                        previous_x + float(args[2]),
-                        previous_y + float(args[3]),
-                        previous_x + float(args[4]),
-                        previous_y + float(args[5]))
-            elif command == 'h':
-                args = (previous_x + float(args[0]),)
-            elif command == 'm':
-                args = (previous_x + float(args[0]),
-                        previous_y + float(args[1]))
-            elif command == 's':
-                args = (previous_x + float(args[0]),
-                        previous_y + float(args[1]),
-                        previous_x + float(args[2]),
-                        previous_y + float(args[3]))
+
+            if command in ('c', 'h', 'l', 'm', 's', 'q'):
+              new_args = list()
+              for i, value in enumerate(args):
+                # previous_value = previous_x if (i % 2 == 1) else previous_y
+                new_args.append(float(args[i]) + float(self.previous_path_xy[i % 2]))
+              args = tuple(new_args)
             elif command == 'v':
-                args = (previous_y + float(args[0]),)
+              args = (previous_y + float(args[0]),)
             elif command == 'z':
                 pass
             else:
@@ -87,6 +104,7 @@ class NanoVGGenerator(generator.Generator):
                 exit(1)
             command = command.upper()
 
+        # Converts 'H', 'S' and 'V' commands to other generic commands.
         if command == 'H':
             command = 'L'
             args = (args[0], self.previous_path_xy[1])
@@ -112,31 +130,53 @@ class NanoVGGenerator(generator.Generator):
             command = 'L'
             args = (self.previous_path_xy[0], args[0])
 
+        # Moves to the previous move point if the previous command is closepath.
+        if self.previous_path is not None and \
+           self.previous_move_point is not None and \
+           self.previous_path[0] == 'Z':
+            if command == 'M':
+                if self.current_subpath % 2:
+                    self.__append_stmt('PathWinding', 'NVG_HOLE')
+                self.current_subpath += 1
+            else:
+                self.__append_stmt('MoveTo', self.previous_move_point)
+
+        # Handles generic commands.
         if command == 'C':
-            self._append_stmt('BezierTo', *args)
+            self.__append_stmt('BezierTo', *args)
             self.previous_path_xy = args[-2:]
         elif command == 'L':
-            self._append_stmt('LineTo', *args)
+            self.__append_stmt('LineTo', *args)
             self.previous_path_xy = args
         elif command == 'M':
-            self._append_stmt('MoveTo', *args)
+            self.__append_stmt('MoveTo', *args)
             self.previous_path_xy = args
+            self.previous_move_point = args
+        elif command == 'Q':
+            self.__append_stmt('nvgQuadTo', *args)
+            self.previous_path_xy = args[-2:]
         elif command == 'Z':
-            self._append_stmt('ClosePath')
+            self.__append_stmt('ClosePath')
         else:
             print('Path command %r is not implemented: %r' % (command, args))
             exit(1)
         self.previous_path = (command, args)
 
+    def polygon(self, **kwargs):
+      points = [tuple(point.split(',')) for point in kwargs['points'].split()]
+      self.__append_stmt('MoveTo', *points[0])
+      for point in points[1:]:
+        self.__append_stmt('LineTo', *point)
+
     def rect(self, **kwargs):
-        stmt = self._gen_stmt('Rect', kwargs['x'], kwargs['y'],
+        stmt = self.__gen_stmt('Rect', kwargs['x'], kwargs['y'],
                                kwargs['width'], kwargs['height'])
-        self._insert_stmt('BeginPath', stmt)
+        self.__insert_stmt('BeginPath', stmt)
 
     def stroke(self, **kwargs):
         color = self.__gen_color(kwargs['stroke'], kwargs['stroke-opacity'])
         if color is not None:
-            self._append_stmt('StrokeColor', color)
+            self.__append_stmt('StrokeColor', color)
         if 'stroke-width' in kwargs:
-            self._append_stmt('StrokeWidth', kwargs['stroke-width'])
-        self._append_stmt('Stroke')
+            self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
+        self.__append_stmt('Stroke')

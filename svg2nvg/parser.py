@@ -13,14 +13,26 @@
 #  limitations under the License.
 
 import exceptions
-import os
 import xml.etree.ElementTree as ET
 
+from svg2nvg import generator
 
+
+# A list of tag names that should be ignored when parsing.
+ignored_tags = ('defs',)
+# A list of supported path commands and the number of parameters each command
+# requires.
 path_commands = (('A', 7), ('C', 6), ('H', 1), ('L', 2), ('M', 2), ('Q', 4),
                  ('S', 4), ('T', 2), ('V', 1), ('Z', 0))
 
-def attr(method):
+
+def attribute(method):
+    """Decorator for parsing element attributes.
+
+    Methods with this decorator must return a dictionary with interested
+    attributes. The dictionary will then be passed to corresponded generator
+    method as parameters.
+    """
     def inner(*args, **kwargs):
         self = args[0]
         result = method(*args, **kwargs)
@@ -30,30 +42,84 @@ def attr(method):
         return result
     return inner
 
-def draw(method):
+def element(method):
+    """Decorator for parsing a element.
+
+    This decorator simply wraps the method between generator's begin_element()
+    and end_element() calls with the tag name as the parameter.
+    """
     def inner(*args, **kwargs):
         self = args[0]
-        self.generator.begin_element()
+        element_tag = get_element_tag(args[1])
+        self.generator.begin_element(element_tag)
         method(*args, **kwargs)
-        self.generator.end_element()
+        self.generator.end_element(element_tag)
     return inner
+
+def get_element_tag(element):
+    """Returns the tag name string without namespace of the passed element."""
+    return element.tag.rsplit('}')[1].lower()
 
 
 class SVGParser(object):
 
-    def __init__(self, generator):
-        self.generator = generator
+    def __init__(self, context='context'):
+        self.context = context
+        self.stmts = list()
 
-    @draw
-    def __convert_rect(self, element):
+    @attribute
+    def __parse_bounds(self, element):
         args = dict()
-        args.update(self.__get_bounds(element))
-        args.update(self.__get_fill(element))
-        args.update(self.__get_stroke(element))
-        self.generator.rect(**args)
+        args['x'] = element.attrib.get('x', 0)
+        args['y'] = element.attrib.get('y', 0)
+        args['width'] = element.attrib.get('width', 0)
+        args['height'] = element.attrib.get('height', 0)
+        return args
 
-    @draw
-    def __convert_path(self, element):
+    @element
+    def __parse_circle(self, element):
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
+        self.generator.circle(**element.attrib)
+
+    @attribute
+    def __parse_fill(self, element):
+        args = dict()
+        if 'fill' not in element.attrib:
+            return args
+        fill = element.attrib['fill']
+        if fill == 'none' or fill == 'transparent':
+            return args
+        args['fill'] = fill
+        args['fill-opacity'] = float(element.attrib.get('opacity', 1)) * \
+                               float(element.attrib.get('fill-opacity', 1))
+        return args
+
+    @element
+    def __parse_g(self, element):
+        # Gathers all group attributes at current level.
+        self.group_attrib.append(element.attrib)
+        group_attrib = dict()
+        for attrib in self.group_attrib:
+            group_attrib.update(attrib)
+
+        # Applies group attributes to child elements.
+        for child in element:
+            child.attrib.update(group_attrib)
+            self.__parse_element(child)
+
+        # Removes the group attributes at current level.
+        self.group_attrib.pop()
+
+    @element
+    def __parse_rect(self, element):
+        self.__parse_bounds(element)
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
+        self.generator.rect(**element.attrib)
+
+    @element
+    def __parse_path(self, element):
         args = dict()
 
         def execute_command(command, parameters):
@@ -75,8 +141,8 @@ class SVGParser(object):
             else:
                 # Checks if the number of parameters matched.
                 if (len(parameters) % parameter_count) != 0:
-                    print("Path command %r should take %d parameters instead of "
-                          "%d" % (command, parameter_count, len(parameters)))
+                    print("Path command %r should take %d parameters instead "
+                          "of %d" % (command, parameter_count, len(parameters)))
                     exit(1)
                 while parameters:
                     self.generator.path_command(command,
@@ -89,6 +155,8 @@ class SVGParser(object):
 
         commands = tuple(c[0] for c in path_commands) + \
                    tuple(c[0].lower() for c in path_commands)
+
+        self.generator.begin_path_commands()
         for char in element.attrib['d']:
             if char in ['\n', '\t']:
                 continue
@@ -112,33 +180,19 @@ class SVGParser(object):
             parameters.append(''.join(parameter_string))
             parameter_string = list()
         execute_command(command, parameters)
+        self.generator.end_path_commands()
 
-        args.update(self.__get_fill(element))
-        args.update(self.__get_stroke(element))
+        args.update(self.__parse_fill(element))
+        args.update(self.__parse_stroke(element))
 
-    @attr
-    def __get_bounds(self, element):
-        args = dict()
-        args['x'] = element.attrib.get('x', 0)
-        args['y'] = element.attrib.get('y', 0)
-        args['width'] = element.attrib.get('width', 0)
-        args['height'] = element.attrib.get('height', 0)
-        return args
+    @element
+    def __parse_polygon(self, element):
+        self.generator.polygon(**element.attrib)
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
 
-    @attr
-    def __get_fill(self, element):
-        args = dict()
-        if 'fill' not in element.attrib:
-            return args
-        fill = element.attrib['fill']
-        if fill == 'none' or fill == 'transparent':
-            return args
-        args['fill'] = fill
-        args['fill-opacity'] = element.attrib.get('fill-opacity', 1)
-        return args
-
-    @attr
-    def __get_stroke(self, element):
+    @attribute
+    def __parse_stroke(self, element):
         args = dict()
         if 'stroke' not in element.attrib:
             return dict()
@@ -146,49 +200,55 @@ class SVGParser(object):
         if stroke == 'none' or stroke == 'transparent':
             return dict()
         args['stroke'] = stroke
-        args['stroke-opacity'] = element.attrib.get('stroke-opacity', 1)
+        args['stroke-opacity'] = float(element.attrib.get('opacity', 1)) * \
+                                 float(element.attrib.get('stroke-opacity', 1))
         if 'stroke-width' in element.attrib:
             args['stroke-width'] = element.attrib['stroke-width']
             if float(args['stroke-width']) < 1:
                 return dict()
         return args
 
-    def __get_tag(self, element):
-        return element.tag.rsplit('}')[1]
-
     def __parse_element(self, element):
-        tag = self.__get_tag(element)
+        tag = get_element_tag(element)
+        if tag in ignored_tags:
+            return
 
+        # Deteremins the method for parsing the passed element.
+        method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag
         try:
-            func = getattr(self,
-                           '_' + self.__class__.__name__ + '__convert_%s' % tag)
+            method = getattr(self, method_name)
         except exceptions.AttributeError:
-            print('%r element is not supported' % tag)
+            print('Error: %r element is not supported' % tag)
             exit(1)
         else:
-            func(element)
+            method(element)
 
     def __parse_tree(self, tree):
         root = tree.getroot()
-        root_tag = self.__get_tag(root)
+        root_tag = get_element_tag(root)
         if root_tag != 'svg':
-            print("The root tag must be svg instead of %r" % root_tag)
+            print("Error: the root tag must be svg instead of %r" % root_tag)
             exit(1)
 
-        self.generator.begin()
+        del self.stmts[:]  # clears the cached statements.
+
         self.canvas_width = root.attrib['width']
         self.canvas_height = root.attrib['height']
+        self.generator = generator.Generator(self.stmts, self.context)
+        self.group_attrib = list()
 
         for child in root:
             self.__parse_element(child)
 
-        self.generator.end()
+    def print_result(self):
+        print('\n'.join(self.stmts))
 
     def parse_file(self, filename):
         try:
             tree = ET.parse(filename)
         except exceptions.IOError:
-            print('Cannot open SVG file at path: %s' % filename)
+            print('Error: cannot open SVG file at path: %s' % filename)
+            exit(1)
         else:
             self.__parse_tree(tree)
 
