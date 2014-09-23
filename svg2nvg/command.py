@@ -13,20 +13,22 @@
 #  limitations under the License.
 
 import argparse
+import os
 import sys
 
 from svg2nvg.parser import SVGParser
 
 
-def convert_svg_file_to_nvg(filename):
-    parser = SVGParser()
-    parser.parse_file(filename)
-    parser.print_result()
-
-
 parser = argparse.ArgumentParser(
     description='Convert SVG files to NVG source code')
 parser.add_argument('svg_path', help='path to a SVG file')
+parser.add_argument('-c', '--context', default='context',
+                    help='the variable name of nanovg context')
+parser.add_argument('-d', '--dest', help='the directory for generated file')
+parser.add_argument('--header_file', action='store_true',
+                    help='generate header file')
+parser.add_argument('-ns', '--namespace', action='store_true',
+                    help='add C++ namespace to header file')
 
 def execute_from_command_line():
     if len(sys.argv) == 1:
@@ -34,4 +36,20 @@ def execute_from_command_line():
         return
 
     args = parser.parse_args()
-    convert_svg_file_to_nvg(args.svg_path)
+    svg_parser = SVGParser(args.context)
+    svg_parser.parse_file(args.svg_path)
+    if args.header_file:
+        result = svg_parser.get_header_file_content(args.svg_path,
+                                                    args.namespace)
+    else:
+        result = svg_parser.get_content()
+    print(result)
+
+    # Saves the result to a file with the same filename in the destination
+    # directory.
+    if args.dest is not None:
+        filename = '%s.h' % os.path.splitext(os.path.basename(args.svg_path))[0]
+        path = os.path.join(os.path.abspath(args.dest), filename)
+        f = open(path, 'w')
+        f.write(result)
+        f.close()

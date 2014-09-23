@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import exceptions
+import os
 import xml.etree.ElementTree as ET
 
 from svg2nvg import generator
@@ -240,8 +241,27 @@ class SVGParser(object):
         for child in root:
             self.__parse_element(child)
 
-    def print_result(self):
-        print('\n'.join(self.stmts))
+    def get_content(self):
+        return '\n'.join(self.stmts)
+
+    def get_header_file_content(self, filename, namespace=False):
+        basename = os.path.splitext(os.path.basename(filename))[0]
+        guard_constant = 'SVG2NVG_%s_H_' % basename.upper()
+        function_name = 'Draw%s' % basename.title().replace('_', '')
+
+        result = '#ifndef %s\n' % guard_constant
+        result += '#define %s\n' % guard_constant
+        if namespace:
+            result += '\nnamespace svg2nvg {\n'
+        result += '\nvoid %s(NVGcontext* %s) {\n' % (function_name,
+                                                     self.context)
+        for stmt in self.stmts:
+            result += '  %s\n' % stmt
+        result += '}\n\n'
+        if namespace:
+            result += '}  // namespace svg2nvg\n\n'
+        result += '#endif  // %s\n' % guard_constant
+        return result
 
     def parse_file(self, filename):
         try:
