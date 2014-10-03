@@ -121,8 +121,6 @@ class SVGParser(object):
 
     @element
     def __parse_path(self, element):
-        args = dict()
-
         def execute_command(command, parameters):
             if not command:
                 return
@@ -183,8 +181,8 @@ class SVGParser(object):
         execute_command(command, parameters)
         self.generator.end_path_commands()
 
-        args.update(self.__parse_fill(element))
-        args.update(self.__parse_stroke(element))
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
 
     @element
     def __parse_polygon(self, element):
