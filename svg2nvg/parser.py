@@ -113,6 +113,13 @@ class SVGParser(object):
         self.group_attrib.pop()
 
     @element
+    def __parse_line(self, element):
+        self.generator.line(element.attrib['x1'], element.attrib['y1'],
+                            element.attrib['x2'], element.attrib['y2'])
+        self.__parse_fill(element);
+        self.__parse_stroke(element);
+
+    @element
     def __parse_rect(self, element):
         self.__parse_bounds(element)
         self.__parse_fill(element)
@@ -201,10 +208,14 @@ class SVGParser(object):
         args['stroke'] = stroke
         args['stroke-opacity'] = float(element.attrib.get('opacity', 1)) * \
                                  float(element.attrib.get('stroke-opacity', 1))
+        if 'stroke-linecap' in element.attrib:
+            args['stroke-linecap'] = element.attrib['stroke-linecap']
+
         if 'stroke-width' in element.attrib:
             args['stroke-width'] = element.attrib['stroke-width']
             if float(args['stroke-width']) < 1:
                 return dict()
+
         return args
 
     def __parse_element(self, element):

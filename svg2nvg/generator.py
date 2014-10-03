@@ -83,6 +83,10 @@ class Generator(object):
             self.__append_stmt('FillColor', color)
         self.__append_stmt('Fill')
 
+    def line(self, x1, y1, x2, y2):
+      self.__append_stmt('MoveTo', x1, y1);
+      self.__append_stmt('LineTo', x2, y2);
+
     def path_command(self, command, *args):
         # Converts relative coordinates to absolute coordinates.
         if command.islower():
@@ -177,6 +181,14 @@ class Generator(object):
         color = self.__gen_color(kwargs['stroke'], kwargs['stroke-opacity'])
         if color is not None:
             self.__append_stmt('StrokeColor', color)
+
+        if 'stroke-linecap' in kwargs:
+            line_caps = {'butt': 'NVG_BUTT', 'round': 'NVG_ROUND',
+                         'square': 'NVG_SQUARE'}
+            line_cap = kwargs['stroke-linecap']
+            if line_cap in line_caps:
+              self.__append_stmt('LineCap', line_caps[line_cap])
+
         if 'stroke-width' in kwargs:
             self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
         self.__append_stmt('Stroke')
