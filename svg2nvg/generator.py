@@ -84,8 +84,8 @@ class Generator(object):
         self.__append_stmt('Fill')
 
     def line(self, x1, y1, x2, y2):
-      self.__append_stmt('MoveTo', x1, y1);
-      self.__append_stmt('LineTo', x2, y2);
+        self.__append_stmt('MoveTo', x1, y1);
+        self.__append_stmt('LineTo', x2, y2);
 
     def path_command(self, command, *args):
         # Converts relative coordinates to absolute coordinates.
@@ -94,13 +94,13 @@ class Generator(object):
             previous_y = float(self.previous_path_xy[1])
 
             if command in ('c', 'h', 'l', 'm', 's', 'q'):
-              new_args = list()
-              for i, value in enumerate(args):
-                # previous_value = previous_x if (i % 2 == 1) else previous_y
-                new_args.append(float(args[i]) + float(self.previous_path_xy[i % 2]))
-              args = tuple(new_args)
+                new_args = list()
+                for i, value in enumerate(args):
+                    previous_value = float(self.previous_path_xy[i % 2])
+                    new_args.append(float(args[i]) + previous_value)
+                args = tuple(new_args)
             elif command == 'v':
-              args = (previous_y + float(args[0]),)
+                args = (previous_y + float(args[0]),)
             elif command == 'z':
                 pass
             else:
@@ -157,7 +157,7 @@ class Generator(object):
             self.previous_path_xy = args
             self.previous_move_point = args
         elif command == 'Q':
-            self.__append_stmt('nvgQuadTo', *args)
+            self.__append_stmt('QuadTo', *args)
             self.previous_path_xy = args[-2:]
         elif command == 'Z':
             self.__append_stmt('ClosePath')
@@ -167,10 +167,10 @@ class Generator(object):
         self.previous_path = (command, args)
 
     def polygon(self, **kwargs):
-      points = [tuple(point.split(',')) for point in kwargs['points'].split()]
-      self.__append_stmt('MoveTo', *points[0])
-      for point in points[1:]:
-        self.__append_stmt('LineTo', *point)
+        points = [tuple(point.split(',')) for point in kwargs['points'].split()]
+        self.__append_stmt('MoveTo', *points[0])
+        for point in points[1:]:
+            self.__append_stmt('LineTo', *point)
 
     def rect(self, **kwargs):
         stmt = self.__gen_stmt('Rect', kwargs['x'], kwargs['y'],
