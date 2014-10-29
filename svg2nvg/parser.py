@@ -83,6 +83,12 @@ class SVGParser(object):
         self.__parse_stroke(element)
         self.generator.circle(**element.attrib)
 
+    @element
+    def __parse_ellipse(self, element):
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
+        self.generator.ellipse(**element.attrib)
+
     @attribute
     def __parse_fill(self, element):
         args = dict()

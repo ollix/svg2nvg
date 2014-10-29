@@ -66,9 +66,14 @@ class Generator(object):
         self.previous_move_point = None
 
     def circle(self, **kwargs):
-        stmt = self.__gen_stmt('Circle', kwargs['cx'], kwargs['cy'], kwargs['r'])
+        stmt = self.__gen_stmt('Circle', kwargs['cx'], kwargs['cy'],
+                               kwargs['r'])
         self.__insert_stmt('BeginPath', stmt)
 
+    def ellipse(self, **kwargs):
+        stmt = self.__gen_stmt('Ellipse', kwargs['cx'], kwargs['cy'],
+                               kwargs['rx'], kwargs['ry'])
+        self.__insert_stmt('BeginPath', stmt)
 
     def end_element(self, tag):
         pass
