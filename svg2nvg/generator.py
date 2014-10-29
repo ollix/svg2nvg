@@ -56,11 +56,12 @@ class Generator(object):
         self.stmts.insert(index, stmt)
 
     def begin_element(self, tag):
-        self.__append_stmt('BeginPath')
+        if tag not in ('g',):
+            self.__append_stmt('BeginPath')
         self.previous_path_xy = (0, 0)
 
     def begin_path_commands(self):
-        self.current_subpath = 0
+        self.first_subpath = True
         self.previous_path = None
         self.previous_move_point = None
 
@@ -74,8 +75,6 @@ class Generator(object):
 
     def end_path_commands(self):
         self.previous_path = None
-        if self.current_subpath % 2:
-            self.__append_stmt('PathWinding', 'NVG_HOLE')
 
     def fill(self, **kwargs):
         color = self.__gen_color(kwargs['fill'], kwargs['fill-opacity'])
@@ -137,13 +136,8 @@ class Generator(object):
         # Moves to the previous move point if the previous command is closepath.
         if self.previous_path is not None and \
            self.previous_move_point is not None and \
-           self.previous_path[0] == 'Z':
-            if command == 'M':
-                if self.current_subpath % 2:
-                    self.__append_stmt('PathWinding', 'NVG_HOLE')
-                self.current_subpath += 1
-            else:
-                self.__append_stmt('MoveTo', self.previous_move_point)
+           self.previous_path[0] == 'Z' and command != 'M':
+            self.__append_stmt('MoveTo', self.previous_move_point)
 
         # Handles generic commands.
         if command == 'C':
@@ -161,6 +155,9 @@ class Generator(object):
             self.previous_path_xy = args[-2:]
         elif command == 'Z':
             self.__append_stmt('ClosePath')
+            if not self.first_subpath:
+                self.__append_stmt('PathWinding', 'NVG_HOLE')
+            self.first_subpath = False
         else:
             print('Path command %r is not implemented: %r' % (command, args))
             exit(1)
