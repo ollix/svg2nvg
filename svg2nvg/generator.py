@@ -61,9 +61,12 @@ class Generator(object):
         self.previous_path_xy = (0, 0)
 
     def begin_path_commands(self):
-        self.first_subpath = True
+        self.subpath_count = 0
         self.previous_path = None
         self.previous_move_point = None
+
+    def bounds(self, **kwargs):
+        pass
 
     def circle(self, **kwargs):
         stmt = self.__gen_stmt('Circle', kwargs['cx'], kwargs['cy'],
@@ -142,6 +145,7 @@ class Generator(object):
         if self.previous_path is not None and \
            self.previous_move_point is not None and \
            self.previous_path[0] == 'Z' and command != 'M':
+            self.subpath_count += 1
             self.__append_stmt('MoveTo', self.previous_move_point)
 
         # Handles generic commands.
@@ -152,6 +156,7 @@ class Generator(object):
             self.__append_stmt('LineTo', *args)
             self.previous_path_xy = args
         elif command == 'M':
+            self.subpath_count += 1
             self.__append_stmt('MoveTo', *args)
             self.previous_path_xy = args
             self.previous_move_point = args
@@ -160,9 +165,8 @@ class Generator(object):
             self.previous_path_xy = args[-2:]
         elif command == 'Z':
             self.__append_stmt('ClosePath')
-            if not self.first_subpath:
+            if self.subpath_count > 1:
                 self.__append_stmt('PathWinding', 'NVG_HOLE')
-            self.first_subpath = False
         else:
             print('Path command %r is not implemented: %r' % (command, args))
             exit(1)
