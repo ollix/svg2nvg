@@ -204,6 +204,12 @@ class SVGParser(object):
         self.__parse_fill(element)
         self.__parse_stroke(element)
 
+    @element
+    def __parse_polyline(self, element):
+        self.generator.polyline(**element.attrib)
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
+
     @attribute
     def __parse_stroke(self, element):
         args = dict()

@@ -179,6 +179,12 @@ class Generator(object):
             self.__append_stmt('LineTo', *point)
         self.__append_stmt('ClosePath')
 
+    def polyline(self, **kwargs):
+        points = [tuple(point.split(',')) for point in kwargs['points'].split()]
+        self.__append_stmt('MoveTo', *points[0])
+        for point in points[1:]:
+            self.__append_stmt('LineTo', *point)
+
     def rect(self, x, y, width, height):
         stmt = self.__gen_stmt('Rect', x, y, width, height)
         self.__insert_stmt('BeginPath', stmt)
