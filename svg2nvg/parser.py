@@ -215,8 +215,11 @@ class SVGParser(object):
         args['stroke'] = stroke
         args['stroke-opacity'] = float(element.attrib.get('opacity', 1)) * \
                                  float(element.attrib.get('stroke-opacity', 1))
-        if 'stroke-linecap' in element.attrib:
-            args['stroke-linecap'] = element.attrib['stroke-linecap']
+
+        for attrib in ['linecap', 'linejoin', 'miterlimit']:
+            attrib = 'stroke-%s' % attrib
+            if attrib in element.attrib:
+                args[attrib] = element.attrib[attrib]
 
         if 'stroke-width' in element.attrib:
             args['stroke-width'] = element.attrib['stroke-width']

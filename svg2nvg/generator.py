@@ -189,12 +189,20 @@ class Generator(object):
         if color is not None:
             self.__append_stmt('StrokeColor', color)
 
+        line_caps = {'butt': 'NVG_BUTT', 'round': 'NVG_ROUND',
+                     'square': 'NVG_SQUARE'}
         if 'stroke-linecap' in kwargs:
-            line_caps = {'butt': 'NVG_BUTT', 'round': 'NVG_ROUND',
-                         'square': 'NVG_SQUARE'}
             line_cap = kwargs['stroke-linecap']
             if line_cap in line_caps:
-              self.__append_stmt('LineCap', line_caps[line_cap])
+                self.__append_stmt('LineCap', line_caps[line_cap])
+
+        if 'stroke-linejoin' in kwargs:
+            line_join = kwargs['stroke-linejoin']
+            if line_join in line_caps:
+                self.__append_stmt('LineJoin', line_caps[line_join])
+
+        if 'stroke-miterlimit' in kwargs:
+            self.__append_stmt('MiterLimit', kwargs['stroke-miterlimit'])
 
         if 'stroke-width' in kwargs:
             self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
