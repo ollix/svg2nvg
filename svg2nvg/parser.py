@@ -93,8 +93,9 @@ class SVGParser(object):
     def __parse_fill(self, element):
         args = dict()
         if 'fill' not in element.attrib:
-            return args
-        fill = element.attrib['fill']
+            fill = '#000000'
+        else:
+            fill = element.attrib['fill']
         if fill == 'none' or fill == 'transparent':
             return args
         args['fill'] = fill
