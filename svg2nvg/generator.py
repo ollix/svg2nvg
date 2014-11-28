@@ -177,6 +177,7 @@ class Generator(object):
         self.__append_stmt('MoveTo', *points[0])
         for point in points[1:]:
             self.__append_stmt('LineTo', *point)
+        self.__append_stmt('ClosePath')
 
     def rect(self, **kwargs):
         stmt = self.__gen_stmt('Rect', kwargs['x'], kwargs['y'],
