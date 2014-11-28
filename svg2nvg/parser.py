@@ -128,10 +128,10 @@ class SVGParser(object):
 
     @element
     def __parse_rect(self, element):
-        self.__parse_bounds(element)
+        args = self.__parse_bounds(element)
+        self.generator.rect(**args)
         self.__parse_fill(element)
         self.__parse_stroke(element)
-        self.generator.rect(**element.attrib)
 
     @element
     def __parse_path(self, element):

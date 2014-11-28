@@ -179,9 +179,8 @@ class Generator(object):
             self.__append_stmt('LineTo', *point)
         self.__append_stmt('ClosePath')
 
-    def rect(self, **kwargs):
-        stmt = self.__gen_stmt('Rect', kwargs['x'], kwargs['y'],
-                               kwargs['width'], kwargs['height'])
+    def rect(self, x, y, width, height):
+        stmt = self.__gen_stmt('Rect', x, y, width, height)
         self.__insert_stmt('BeginPath', stmt)
 
     def stroke(self, **kwargs):
