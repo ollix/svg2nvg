@@ -14,13 +14,14 @@
 
 import exceptions
 import os
+import sys
 import xml.etree.ElementTree as ET
 
 from svg2nvg import generator
 
 
 # A list of tag names that should be ignored when parsing.
-ignored_tags = ('defs',)
+ignored_tags = ('comment', 'defs', 'desc', 'title', 'namedview')
 # A list of supported path commands and the number of parameters each command
 # requires.
 path_commands = (('A', 7), ('C', 6), ('H', 1), ('L', 2), ('M', 2), ('Q', 4),
@@ -118,6 +119,21 @@ class SVGParser(object):
 
         # Removes the group attributes at current level.
         self.group_attrib.pop()
+
+    def __parse_element(self, element):
+        tag = get_element_tag(element)
+        if tag in ignored_tags:
+            return
+
+        # Deteremins the method for parsing the passed element.
+        method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag
+        try:
+            method = getattr(self, method_name)
+        except exceptions.AttributeError:
+            print('Error: %r element is not supported' % tag)
+            exit(1)
+        else:
+            method(element)
 
     @element
     def __parse_line(self, element):
@@ -234,21 +250,6 @@ class SVGParser(object):
 
         return args
 
-    def __parse_element(self, element):
-        tag = get_element_tag(element)
-        if tag in ignored_tags:
-            return
-
-        # Deteremins the method for parsing the passed element.
-        method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag
-        try:
-            method = getattr(self, method_name)
-        except exceptions.AttributeError:
-            print('Error: %r element is not supported' % tag)
-            exit(1)
-        else:
-            method(element)
-
     def __parse_tree(self, tree):
         root = tree.getroot()
         root_tag = get_element_tag(root)
@@ -269,23 +270,52 @@ class SVGParser(object):
     def get_content(self):
         return '\n'.join(self.stmts)
 
-    def get_header_file_content(self, filename, namespace=False):
+    def get_header_file_content(self, filename, namespace=False,
+                                prototype_only=False):
         basename = os.path.splitext(os.path.basename(filename))[0]
         guard_constant = 'SVG2NVG_%s_H_' % basename.upper()
         function_name = 'Draw%s' % basename.title().replace('_', '')
 
         result = '#ifndef %s\n' % guard_constant
-        result += '#define %s\n' % guard_constant
+        result += '#define %s\n\n' % guard_constant
         if namespace:
-            result += '\nnamespace svg2nvg {\n'
-        result += '\nvoid %s(NVGcontext* %s) {\n' % (function_name,
-                                                     self.context)
+            result += 'namespace svg2nvg {\n\n'
+        prototype = 'void %s(NVGcontext* %s)' % (function_name, self.context)
+        if prototype_only:
+            result += '%s;\n\n' % prototype
+        else:
+            result += '%s {\n' % prototype
+            for stmt in self.stmts:
+                result += '  %s\n' % stmt
+            result += '}\n\n'
+        if namespace:
+            result += '}  // namespace svg2nvg\n\n'
+        result += '#endif  // %s\n' % guard_constant
+        return result
+
+    def get_source_file_content(self, filename, namespace=False,
+                                header_include_path=None,
+                                nanovg_include_path=None):
+        result = ''
+        if nanovg_include_path is not None:
+            result += '#include "%s"\n\n' % nanovg_include_path
+
+        basename = os.path.splitext(os.path.basename(filename))[0]
+        if header_include_path is None:
+            header_include_path = ''
+        header_name = '%s.h' % basename
+        header_include_path = os.path.join(header_include_path, header_name)
+        result += '#include "%s"\n\n' % header_include_path
+
+        if namespace:
+            result += 'namespace svg2nvg {\n\n'
+        function_name = 'Draw%s' % basename.title().replace('_', '')
+        result += 'void %s(NVGcontext* %s) {\n' % (function_name, self.context)
         for stmt in self.stmts:
             result += '  %s\n' % stmt
         result += '}\n\n'
         if namespace:
-            result += '}  // namespace svg2nvg\n\n'
-        result += '#endif  // %s\n' % guard_constant
+            result += '}  // namespace svg2nvg\n'
         return result
 
     def parse_file(self, filename):

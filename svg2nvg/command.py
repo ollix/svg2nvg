@@ -27,6 +27,12 @@ parser.add_argument('-c', '--context', default='context',
 parser.add_argument('-d', '--dest', help='the directory for generated file')
 parser.add_argument('--header_file', action='store_true',
                     help='generate header file')
+parser.add_argument('-i', '--include_path', default='',
+                    help='the include path for generated headers')
+parser.add_argument('-vg', '--nanovg_include_path', default='',
+                    help='the include path for nanovg')
+parser.add_argument('--source_file', action='store_true',
+                    help='generate source file')
 parser.add_argument('-ns', '--namespace', action='store_true',
                     help='add C++ namespace to header file')
 
@@ -38,18 +44,34 @@ def execute_from_command_line():
     args = parser.parse_args()
     svg_parser = SVGParser(args.context)
     svg_parser.parse_file(args.svg_path)
-    if args.header_file:
+
+    basename = os.path.splitext(os.path.basename(args.svg_path))[0]
+    dest_path = os.path.join(os.path.abspath(args.dest), basename)
+    filename = '%s.h' % basename
+
+    if args.source_file:
+        result = svg_parser.get_header_file_content(basename,
+                                                    args.namespace,
+                                                    prototype_only=True)
+        if args.dest is not None:
+            header_file = file('%s.h' % dest_path, 'w')
+            header_file.write(result)
+            header_file.close()
+
+        result = svg_parser.get_source_file_content(basename, args.namespace,
+                                                    args.include_path,
+                                                    args.nanovg_include_path)
+        if args.dest is not None:
+            source_file = file('%s.cc' % dest_path, 'w')
+            source_file.write(result)
+            source_file.close()
+    elif args.header_file:
         result = svg_parser.get_header_file_content(args.svg_path,
                                                     args.namespace)
+        if args.dest is not None:
+            header_file = file('%s.h' % dest_path, 'w')
+            header_file.write(result)
+            header_file.close()
     else:
         result = svg_parser.get_content()
-    print(result)
-
-    # Saves the result to a file with the same filename in the destination
-    # directory.
-    if args.dest is not None:
-        filename = '%s.h' % os.path.splitext(os.path.basename(args.svg_path))[0]
-        path = os.path.join(os.path.abspath(args.dest), filename)
-        f = open(path, 'w')
-        f.write(result)
-        f.close()
+        print(result)
