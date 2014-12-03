@@ -80,15 +80,15 @@ class SVGParser(object):
 
     @element
     def __parse_circle(self, element):
+        self.generator.circle(**element.attrib)
         self.__parse_fill(element)
         self.__parse_stroke(element)
-        self.generator.circle(**element.attrib)
 
     @element
     def __parse_ellipse(self, element):
+        self.generator.ellipse(**element.attrib)
         self.__parse_fill(element)
         self.__parse_stroke(element)
-        self.generator.ellipse(**element.attrib)
 
     @attribute
     def __parse_fill(self, element):
@@ -144,6 +144,7 @@ class SVGParser(object):
 
     @element
     def __parse_rect(self, element):
+        self.__parse_transform(element)
         args = self.__parse_bounds(element)
         self.generator.rect(**args)
         self.__parse_fill(element)
@@ -249,6 +250,12 @@ class SVGParser(object):
                 return dict()
 
         return args
+
+    @attribute
+    def __parse_transform(self, element):
+        if 'transform' not in element.attrib:
+            return dict()
+        return {'transform': element.attrib['transform']}
 
     def __parse_tree(self, tree):
         root = tree.getroot()

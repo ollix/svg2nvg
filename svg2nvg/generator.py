@@ -12,11 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import re
+
 class Generator(object):
 
     def __init__(self, stmts, context='context'):
         self.context = context
         self.stmts = stmts
+
+        self.previous_path_xy = []
+        self.transform_counts = []
 
     def __append_stmt(self, *args):
         stmt = self.__gen_stmt(*args)
@@ -46,19 +51,12 @@ class Generator(object):
             stmt = 'nvg%s(%s, %s);' % (command, self.context, ', '.join(args))
         return stmt
 
-    def __insert_stmt(self, keyword, stmt):
-        index = 0
-        for history_stmt in reversed(self.stmts):
-            if keyword in history_stmt:
-                break
-            index -= 1
-        index = len(self.stmts) + index
-        self.stmts.insert(index, stmt)
-
     def begin_element(self, tag):
         if tag not in ('g',):
             self.__append_stmt('BeginPath')
-        self.previous_path_xy = (0, 0)
+
+        self.previous_path_xy.append((0, 0))
+        self.transform_counts.append(0);
 
     def begin_path_commands(self):
         self.subpath_count = 0
@@ -69,17 +67,19 @@ class Generator(object):
         pass
 
     def circle(self, **kwargs):
-        stmt = self.__gen_stmt('Circle', kwargs['cx'], kwargs['cy'],
-                               kwargs['r'])
-        self.__insert_stmt('BeginPath', stmt)
+        stmt = self.__append_stmt('Circle', kwargs['cx'], kwargs['cy'],
+                                  kwargs['r'])
 
     def ellipse(self, **kwargs):
-        stmt = self.__gen_stmt('Ellipse', kwargs['cx'], kwargs['cy'],
-                               kwargs['rx'], kwargs['ry'])
-        self.__insert_stmt('BeginPath', stmt)
+        stmt = self.__append_stmt('Ellipse', kwargs['cx'], kwargs['cy'],
+                                  kwargs['rx'], kwargs['ry'])
 
     def end_element(self, tag):
-        pass
+        for i in range(self.transform_counts[-1]):
+            self.__append_stmt('Restore')
+
+        self.previous_path_xy.pop()
+        self.transform_counts.pop()
 
     def end_path_commands(self):
         self.previous_path = None
@@ -97,13 +97,13 @@ class Generator(object):
     def path_command(self, command, *args):
         # Converts relative coordinates to absolute coordinates.
         if command.islower():
-            previous_x = float(self.previous_path_xy[0])
-            previous_y = float(self.previous_path_xy[1])
+            previous_x = float(self.previous_path_xy[-1][0])
+            previous_y = float(self.previous_path_xy[-1][1])
 
             if command in ('c', 'h', 'l', 'm', 's', 'q'):
                 new_args = list()
                 for i, value in enumerate(args):
-                    previous_value = float(self.previous_path_xy[i % 2])
+                    previous_value = float(self.previous_path_xy[-1][i % 2])
                     new_args.append(float(args[i]) + previous_value)
                 args = tuple(new_args)
             elif command == 'v':
@@ -118,7 +118,7 @@ class Generator(object):
         # Converts 'H', 'S' and 'V' commands to other generic commands.
         if command == 'H':
             command = 'L'
-            args = (args[0], self.previous_path_xy[1])
+            args = (args[0], self.previous_path_xy[-1][1])
         elif command == 'S':
             if self.previous_path is None:
                 previous_command = None
@@ -139,7 +139,7 @@ class Generator(object):
                 print('Path command S is not implement')
         elif command == 'V':
             command = 'L'
-            args = (self.previous_path_xy[0], args[0])
+            args = (self.previous_path_xy[-1][0], args[0])
 
         # Moves to the previous move point if the previous command is closepath.
         if self.previous_path is not None and \
@@ -151,18 +151,18 @@ class Generator(object):
         # Handles generic commands.
         if command == 'C':
             self.__append_stmt('BezierTo', *args)
-            self.previous_path_xy = args[-2:]
+            self.previous_path_xy[-1] = args[-2:]
         elif command == 'L':
             self.__append_stmt('LineTo', *args)
-            self.previous_path_xy = args
+            self.previous_path_xy[-1] = args
         elif command == 'M':
             self.subpath_count += 1
             self.__append_stmt('MoveTo', *args)
-            self.previous_path_xy = args
+            self.previous_path_xy[-1] = args
             self.previous_move_point = args
         elif command == 'Q':
             self.__append_stmt('QuadTo', *args)
-            self.previous_path_xy = args[-2:]
+            self.previous_path_xy[-1] = args[-2:]
         elif command == 'Z':
             self.__append_stmt('ClosePath')
             if self.subpath_count > 1:
@@ -186,8 +186,7 @@ class Generator(object):
             self.__append_stmt('LineTo', *point)
 
     def rect(self, x, y, width, height):
-        stmt = self.__gen_stmt('Rect', x, y, width, height)
-        self.__insert_stmt('BeginPath', stmt)
+        self.__append_stmt('Rect', x, y, width, height)
 
     def stroke(self, **kwargs):
         color = self.__gen_color(kwargs['stroke'], kwargs['stroke-opacity'])
@@ -212,3 +211,12 @@ class Generator(object):
         if 'stroke-width' in kwargs:
             self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
         self.__append_stmt('Stroke')
+
+    def transform(self, **kwargs):
+        pattern = re.compile(r'^matrix\((.*)\)$')
+        match = pattern.search(kwargs['transform'])
+        if match:
+            parameters = match.group(1).split()
+            stmt = self.__append_stmt('Save')
+            stmt = self.__append_stmt('Transform', *parameters)
+            self.transform_counts[-1] += 1
