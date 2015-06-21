@@ -277,36 +277,37 @@ class SVGParser(object):
     def get_content(self):
         return '\n'.join(self.stmts)
 
-    def get_header_file_content(self, filename, namespace=False,
-                                prototype_only=False):
+    def get_header_file_content(self, filename, nanovg_include_path,
+                                uses_namespace=False, prototype_only=False):
         basename = os.path.splitext(os.path.basename(filename))[0]
         guard_constant = 'SVG2NVG_%s_H_' % basename.upper()
-        function_name = 'Draw%s' % basename.title().replace('_', '')
+        function_name = 'Render%s' % basename.title().replace('_', '')
 
         result = '#ifndef %s\n' % guard_constant
         result += '#define %s\n\n' % guard_constant
-        if namespace:
+
+        if nanovg_include_path:
+            result += '#include "%s"\n\n' % nanovg_include_path
+
+        if uses_namespace:
             result += 'namespace svg2nvg {\n\n'
         prototype = 'void %s(NVGcontext* %s)' % (function_name, self.context)
         if prototype_only:
             result += '%s;\n\n' % prototype
         else:
-            result += '%s {\n' % prototype
+            result += 'static %s {\n' % prototype
             for stmt in self.stmts:
                 result += '  %s\n' % stmt
             result += '}\n\n'
-        if namespace:
+        if uses_namespace:
             result += '}  // namespace svg2nvg\n\n'
         result += '#endif  // %s\n' % guard_constant
         return result
 
-    def get_source_file_content(self, filename, namespace=False,
-                                header_include_path=None,
-                                nanovg_include_path=None):
+    def get_source_file_content(self, filename, nanovg_include_path,
+                                uses_namespace=False,
+                                header_include_path=None):
         result = ''
-        if nanovg_include_path is not None:
-            result += '#include "%s"\n\n' % nanovg_include_path
-
         basename = os.path.splitext(os.path.basename(filename))[0]
         if header_include_path is None:
             header_include_path = ''
@@ -314,14 +315,17 @@ class SVGParser(object):
         header_include_path = os.path.join(header_include_path, header_name)
         result += '#include "%s"\n\n' % header_include_path
 
-        if namespace:
+        if nanovg_include_path:
+            result += '#include "%s"\n\n' % nanovg_include_path
+
+        if uses_namespace:
             result += 'namespace svg2nvg {\n\n'
-        function_name = 'Draw%s' % basename.title().replace('_', '')
+        function_name = 'Render%s' % basename.title().replace('_', '')
         result += 'void %s(NVGcontext* %s) {\n' % (function_name, self.context)
         for stmt in self.stmts:
             result += '  %s\n' % stmt
         result += '}\n\n'
-        if namespace:
+        if uses_namespace:
             result += '}  // namespace svg2nvg\n'
         return result
 
