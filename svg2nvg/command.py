@@ -57,7 +57,7 @@ def execute_from_command_line():
                                                     args.uses_namespace,
                                                     prototype_only=True)
         if args.dest is not None:
-            header_file = file('%s.h' % dest_path, 'w')
+            header_file = open('%s.h' % dest_path, 'w')
             header_file.write(result)
             header_file.close()
 
@@ -66,7 +66,7 @@ def execute_from_command_line():
                                                     args.uses_namespace,
                                                     args.include_path)
         if args.dest is not None:
-            source_file = file('%s.cc' % dest_path, 'w')
+            source_file = open('%s.cc' % dest_path, 'w')
             source_file.write(result)
             source_file.close()
     elif args.header_file:
@@ -75,7 +75,7 @@ def execute_from_command_line():
                                                     args.uses_namespace,
                                                     prototype_only=False)
         if args.dest is not None:
-            header_file = file('%s.h' % dest_path, 'w')
+            header_file = open('%s.h' % dest_path, 'w')
             header_file.write(result)
             header_file.close()
     else:

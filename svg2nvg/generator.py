@@ -36,7 +36,7 @@ class Generator(object):
             color = color[1:]
             if len(color) == 3:
                 color = ''.join([c + c for c in color])
-            color = tuple(ord(c) for c in color.decode('hex'))
+            color = tuple(c for c in bytes.fromhex(color))
         elif color == 'black':
             color = (255, 255, 255)
         return 'nvgRGBA(%d, %d, %d, %d)' % (color[0], color[1], color[2],
