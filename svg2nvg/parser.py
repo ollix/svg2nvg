@@ -16,11 +16,12 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 
+from svg2nvg import definitions
 from svg2nvg import generator
 
 
 # A list of tag names that should be ignored when parsing.
-ignored_tags = ('comment', 'defs', 'desc', 'title', 'namedview')
+ignored_tags = ('comment', 'desc', 'title', 'namedview')
 # A list of supported path commands and the number of parameters each command
 # requires.
 path_commands = (('A', 7), ('C', 6), ('H', 1), ('L', 2), ('M', 2), ('Q', 4),
@@ -59,7 +60,7 @@ def element(method):
 
 def get_element_tag(element):
     """Returns the tag name string without namespace of the passed element."""
-    return element.tag.rsplit('}')[1].lower()
+    return element.tag.rsplit('}')[1]
 
 
 class SVGParser(object):
@@ -82,6 +83,21 @@ class SVGParser(object):
         self.generator.circle(**element.attrib)
         self.__parse_fill(element)
         self.__parse_stroke(element)
+
+    def __parse_element(self, element):
+        tag = get_element_tag(element)
+        if tag in ignored_tags:
+            return
+
+        # Deteremins the method for parsing the passed element.
+        method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag.lower()
+        try:
+            method = getattr(self, method_name)
+        except AttributeError:
+            print('Error: %r element is not supported' % tag)
+            exit(1)
+        else:
+            method(element)
 
     @element
     def __parse_ellipse(self, element):
@@ -119,21 +135,6 @@ class SVGParser(object):
         # Removes the group attributes at current level.
         self.group_attrib.pop()
 
-    def __parse_element(self, element):
-        tag = get_element_tag(element)
-        if tag in ignored_tags:
-            return
-
-        # Deteremins the method for parsing the passed element.
-        method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag
-        try:
-            method = getattr(self, method_name)
-        except exceptions.AttributeError:
-            print('Error: %r element is not supported' % tag)
-            exit(1)
-        else:
-            method(element)
-
     @element
     def __parse_line(self, element):
         self.generator.line(element.attrib['x1'], element.attrib['y1'],
@@ -142,12 +143,9 @@ class SVGParser(object):
         self.__parse_stroke(element);
 
     @element
-    def __parse_rect(self, element):
-        self.__parse_transform(element)
-        args = self.__parse_bounds(element)
-        self.generator.rect(**args)
-        self.__parse_fill(element)
-        self.__parse_stroke(element)
+    def __parse_lineargradient(self, element):
+        self.generator.definitions[element.get('id')] = \
+            definitions.LinearGradientDefinition(element)
 
     @element
     def __parse_path(self, element):
@@ -223,6 +221,14 @@ class SVGParser(object):
     @element
     def __parse_polyline(self, element):
         self.generator.polyline(**element.attrib)
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
+
+    @element
+    def __parse_rect(self, element):
+        self.__parse_transform(element)
+        args = self.__parse_bounds(element)
+        self.generator.rect(**args)
         self.__parse_fill(element)
         self.__parse_stroke(element)
 

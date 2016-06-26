@@ -19,26 +19,45 @@ class Generator(object):
     def __init__(self, stmts, context='context'):
         self.context = context
         self.stmts = stmts
+        self.new_paint = True
 
         self.previous_path_xy = []
         self.transform_counts = []
+        self.definitions = {}
 
     def __append_stmt(self, *args):
+        if len(args) == 1 and args[0] == 'FillPaint':
+            args = args + ('paint',)
+
         stmt = self.__gen_stmt(*args)
+
+        if args[0] in ('LinearGradient',):
+            if self.new_paint:
+                stmt = 'NVGpaint paint = ' + stmt
+                self.new_paint = False
+            else:
+                stmt = 'paint = ' + stmt
+
         self.stmts.append(stmt)
+
+    def __append_stmts(self, stmts):
+        for stmt in stmts:
+            self.__append_stmt(*stmt)
 
     def __gen_color(self, color, opacity):
         if color == 'none' or not color or opacity == 0:
             return None
-
         opacity = round(float(opacity) * 255)
-        if color.startswith('#'):
-            color = color[1:]
-            if len(color) == 3:
-                color = ''.join([c + c for c in color])
+
+        match = re.match(r'^#([0-9a-fA-F]{6})$', color)
+        if match:
+            color = match.group(1)
             color = tuple(c for c in bytes.fromhex(color))
         elif color == 'black':
             color = (255, 255, 255)
+        else:
+            print("Found unknown color: %r" % color)
+            exit(1)
         return 'nvgRGBA(%d, %d, %d, %d)' % (color[0], color[1], color[2],
                                             opacity)
 
@@ -52,7 +71,7 @@ class Generator(object):
         return stmt
 
     def begin_element(self, tag):
-        if tag not in ('g',):
+        if tag not in ('g', 'linearGradient'):
             self.__append_stmt('BeginPath')
 
         self.previous_path_xy.append((0, 0))
@@ -85,9 +104,20 @@ class Generator(object):
         self.previous_path = None
 
     def fill(self, **kwargs):
-        color = self.__gen_color(kwargs['fill'], kwargs['fill-opacity'])
-        if color is not None:
-            self.__append_stmt('FillColor', color)
+        fill = kwargs['fill']
+
+        url_match = re.match(r'^url\(#(.*)\)$', fill)
+        if url_match:
+            definition_id = url_match.group(1)
+            definition = self.definitions.get(definition_id)
+            if not definition:
+                print("Could not find definition: %r" % definition_id)
+                exit(1)
+            self.__append_stmts(definition.generate_stmts())
+        else:
+            color = self.__gen_color(fill, kwargs['fill-opacity'])
+            if color is not None:
+                self.__append_stmt('FillColor', color)
         self.__append_stmt('Fill')
 
     def line(self, x1, y1, x2, y2):
