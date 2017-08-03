@@ -141,7 +141,7 @@ class Generator(object):
             elif command == 'z':
                 pass
             else:
-                print("Path command %r is not implmeneted" % command)
+                print("Path command %r is not implemeneted" % command)
                 exit(1)
             command = command.upper()
 
@@ -183,6 +183,10 @@ class Generator(object):
             self.__append_stmt('BezierTo', *args)
             self.previous_path_xy[-1] = args[-2:]
         elif command == 'L':
+            if self.previous_path[0] in 'ML' and \
+               args[0] == self.previous_path_xy[-1][0] and \
+               args[1] == self.previous_path_xy[-1][1]:
+                return
             self.__append_stmt('LineTo', *args)
             self.previous_path_xy[-1] = args
         elif command == 'M':
@@ -194,6 +198,8 @@ class Generator(object):
             self.__append_stmt('QuadTo', *args)
             self.previous_path_xy[-1] = args[-2:]
         elif command == 'Z':
+            if self.previous_path[0] == 'M':
+                return;
             self.__append_stmt('ClosePath')
             if self.subpath_count > 1:
                 self.__append_stmt('PathWinding', 'NVG_HOLE')
