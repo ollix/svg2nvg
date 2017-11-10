@@ -114,6 +114,8 @@ class Generator(object):
                 print("Could not find definition: %r" % definition_id)
                 exit(1)
             self.__append_stmts(definition.generate_stmts())
+            if (definition.should_restore):
+                self.transform_counts[-1] += 1
         else:
             color = self.__gen_color(fill, kwargs['fill-opacity'])
             if color is not None:

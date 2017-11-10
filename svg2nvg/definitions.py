@@ -29,6 +29,17 @@ class LinearGradientDefinition(Definition):
         x2 = float(element.attrib['x2'])
         y2 = float(element.attrib['y2'])
 
+        # Determines the transform.
+        transform = element.attrib['gradientTransform'];
+        self.should_restore = False
+        if transform:
+            match = re.match(r'matrix\((.*)\)', transform)
+            if match:
+                transform = match.group(1).split()
+                if (len(transform) == 6):
+                    self.transform = transform
+                    self.should_restore = True
+
         self.stops = []
         for stop in element:
             if stop.tag.rsplit('}')[1] != 'stop':
@@ -71,6 +82,11 @@ class LinearGradientDefinition(Definition):
     def generate_stmts(self):
         stmts = []
         src_stop = None
+
+        if self.transform:
+            stmts.append(['Save'])
+            stmts.append(['Transform'] + self.transform)
+
         for dest_stop in self.stops:
             if src_stop is None:
                 src_stop = dest_stop
