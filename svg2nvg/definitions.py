@@ -30,7 +30,8 @@ class LinearGradientDefinition(Definition):
         y2 = float(element.attrib['y2'])
 
         # Determines the transform.
-        transform = element.attrib['gradientTransform'];
+        self.transform = None
+        transform = element.attrib.get('gradientTransform', None);
         self.should_restore = False
         if transform:
             match = re.match(r'matrix\((.*)\)', transform)
@@ -83,7 +84,7 @@ class LinearGradientDefinition(Definition):
         stmts = []
         src_stop = None
 
-        if self.transform:
+        if self.transform is not None:
             stmts.append(['Save'])
             stmts.append(['Transform'] + self.transform)
 
