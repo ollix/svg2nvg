@@ -14,6 +14,7 @@
 
 import functools
 import re
+import sys
 
 
 class Definition(object):
@@ -61,7 +62,10 @@ class LinearGradientDefinition(Definition):
             else:
                 opacity = 255
 
-            color = tuple(c for c in bytes.fromhex(color))
+            if sys.version_info[0] < 3:
+                color = tuple(ord(c) for c in color.decode('hex'))
+            else:
+                color = tuple(c for c in bytes.fromhex(color))
             color = 'nvgRGBA(%d, %d, %d, %d)' % (color[0], color[1], color[2],
                                                  opacity)
 

@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import re
+import sys
 
 class Generator(object):
 
@@ -52,7 +53,10 @@ class Generator(object):
         match = re.match(r'^#([0-9a-fA-F]{6})$', color)
         if match:
             color = match.group(1)
-            color = tuple(c for c in bytes.fromhex(color))
+            if sys.version_info[0] < 3:
+                color = tuple(ord(c) for c in color.decode('hex'))
+            else:
+                color = tuple(c for c in bytes.fromhex(color))
         elif color == 'black':
             color = (255, 255, 255)
         else:
