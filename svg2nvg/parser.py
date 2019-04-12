@@ -184,6 +184,7 @@ class SVGParser(object):
 
         parameters = list()
         command = None
+        found_decimal_separator = False
         parameter_string = list()
 
         commands = tuple(c[0] for c in path_commands) + \
@@ -200,11 +201,22 @@ class SVGParser(object):
                 execute_command(command, parameters)
                 command = char
                 parameters = list()
+                found_decimal_separator = False
             elif char in [' ', ',', '-']:
                 if parameter_string:
                     parameters.append(''.join(parameter_string))
                     parameter_string = list()
+                    found_decimal_separator = False
                 if char in ['-']:
+                    parameter_string.append(char)
+                    found_decimal_separator = False
+            elif char == '.':
+                if found_decimal_separator:
+                    parameters.append(''.join(parameter_string))
+                    parameter_string = list()
+                    parameter_string.append(char)
+                else:
+                    found_decimal_separator = True
                     parameter_string.append(char)
             elif command is not None:
                 parameter_string.append(char)
