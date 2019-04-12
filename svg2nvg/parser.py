@@ -277,8 +277,13 @@ class SVGParser(object):
 
         del self.stmts[:]  # clears the cached statements.
 
-        self.canvas_width = root.attrib['width']
-        self.canvas_height = root.attrib['height']
+        try:
+            self.canvas_width = root.attrib['width']
+            self.canvas_height = root.attrib['height']
+        except KeyError:
+            view_box = root.attrib['viewBox'].split(' ')
+            self.canvas_width = view_box[2]
+            self.canvas_height = view_box[3]
         self.generator = generator.Generator(self.stmts, self.context)
         self.group_attrib = list()
 
