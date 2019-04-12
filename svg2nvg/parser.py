@@ -114,6 +114,12 @@ class SVGParser(object):
             fill = element.attrib['fill']
         if fill == 'none' or fill == 'transparent':
             return args
+
+        # Expands three-digit shorthand of hex color.
+        if fill.startswith("#") and len(fill) == 4:
+            fill = '#%c%c%c%c%c%c' % (fill[1], fill[1], fill[2], fill[2],
+                                      fill[3], fill[3])
+
         args['fill'] = fill
         args['fill-opacity'] = float(element.attrib.get('opacity', 1)) * \
                                float(element.attrib.get('fill-opacity', 1))
