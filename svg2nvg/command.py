@@ -49,7 +49,6 @@ def execute_from_command_line():
 
     basename = os.path.splitext(os.path.basename(args.svg_path))[0]
     dest_path = os.path.join(os.path.abspath(args.dest), basename)
-    filename = '%s.h' % basename
 
     if args.source_file:
         result = svg_parser.get_header_file_content(basename,

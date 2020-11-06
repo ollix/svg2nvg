@@ -79,7 +79,7 @@ class Generator(object):
             self.__append_stmt('BeginPath')
 
         self.previous_path_xy.append((0, 0))
-        self.transform_counts.append(0);
+        self.transform_counts.append(0)
 
     def begin_path_commands(self):
         self.subpath_count = 0
@@ -127,8 +127,8 @@ class Generator(object):
         self.__append_stmt('Fill')
 
     def line(self, x1, y1, x2, y2):
-        self.__append_stmt('MoveTo', x1, y1);
-        self.__append_stmt('LineTo', x2, y2);
+        self.__append_stmt('MoveTo', x1, y1)
+        self.__append_stmt('LineTo', x2, y2)
 
     def path_command(self, command, *args):
         # Converts relative coordinates to absolute coordinates.
@@ -205,7 +205,7 @@ class Generator(object):
             self.previous_path_xy[-1] = args[-2:]
         elif command == 'Z':
             if self.previous_path[0] == 'M':
-                return;
+                return
             self.__append_stmt('ClosePath')
             if self.subpath_count > 1:
                 self.__append_stmt('PathWinding', 'NVG_HOLE')
@@ -259,6 +259,6 @@ class Generator(object):
         match = pattern.search(kwargs['transform'])
         if match:
             parameters = match.group(1).split()
-            stmt = self.__append_stmt('Save')
-            stmt = self.__append_stmt('Transform', *parameters)
+            self.__append_stmt('Save')
+            self.__append_stmt('Transform', *parameters)
             self.transform_counts[-1] += 1

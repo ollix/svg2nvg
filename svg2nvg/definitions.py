@@ -32,7 +32,7 @@ class LinearGradientDefinition(Definition):
 
         # Determines the transform.
         self.transform = None
-        transform = element.attrib.get('gradientTransform', None);
+        transform = element.attrib.get('gradientTransform', None)
         self.should_restore = False
         if transform:
             match = re.match(r'matrix\((.*)\)', transform)

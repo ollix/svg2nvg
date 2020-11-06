@@ -89,7 +89,7 @@ class SVGParser(object):
         if tag in ignored_tags:
             return
 
-        # Deteremins the method for parsing the passed element.
+        # Determines the method for parsing the passed element.
         method_name = '_' + self.__class__.__name__ + '__parse_%s' % tag.lower()
         try:
             method = getattr(self, method_name)
@@ -145,8 +145,8 @@ class SVGParser(object):
     def __parse_line(self, element):
         self.generator.line(element.attrib['x1'], element.attrib['y1'],
                             element.attrib['x2'], element.attrib['y2'])
-        self.__parse_fill(element);
-        self.__parse_stroke(element);
+        self.__parse_fill(element)
+        self.__parse_stroke(element)
 
     @element
     def __parse_lineargradient(self, element):
@@ -360,7 +360,7 @@ class SVGParser(object):
     def parse_file(self, filename):
         try:
             tree = ET.parse(filename)
-        except exceptions.IOError:
+        except IOError:
             print('Error: cannot open SVG file at path: %s' % filename)
             exit(1)
         else:
