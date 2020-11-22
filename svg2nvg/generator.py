@@ -90,12 +90,11 @@ class Generator(object):
         pass
 
     def circle(self, **kwargs):
-        stmt = self.__append_stmt('Circle', kwargs['cx'], kwargs['cy'],
-                                  kwargs['r'])
+        self.__append_stmt('Circle', kwargs['cx'], kwargs['cy'], kwargs['r'])
 
     def ellipse(self, **kwargs):
-        stmt = self.__append_stmt('Ellipse', kwargs['cx'], kwargs['cy'],
-                                  kwargs['rx'], kwargs['ry'])
+        self.__append_stmt('Ellipse', kwargs['cx'], kwargs['cy'], kwargs['rx'],
+                           kwargs['ry'])
 
     def end_element(self, tag):
         for i in range(self.transform_counts[-1]):
@@ -232,7 +231,9 @@ class Generator(object):
 
     def stroke(self, **kwargs):
         color = self.__gen_color(kwargs['stroke'], kwargs['stroke-opacity'])
+        calls_stroke = False
         if color is not None:
+            calls_stroke = True
             self.__append_stmt('StrokeColor', color)
 
         line_caps = {'butt': 'NVG_BUTT', 'round': 'NVG_ROUND',
@@ -252,7 +253,9 @@ class Generator(object):
 
         if 'stroke-width' in kwargs:
             self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
-        self.__append_stmt('Stroke')
+
+        if calls_stroke:
+            self.__append_stmt('Stroke')
 
     def transform(self, **kwargs):
         pattern = re.compile(r'^matrix\((.*)\)$')

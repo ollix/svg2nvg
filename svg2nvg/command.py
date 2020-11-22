@@ -22,6 +22,8 @@ from svg2nvg.parser import SVGParser
 parser = argparse.ArgumentParser(
     description='Convert SVG files to NVG source code')
 parser.add_argument('svg_path', help='path to a SVG file')
+parser.add_argument('-o', '--build_object', action='store_true',
+                    help='generate class source files')
 parser.add_argument('-c', '--context', default='context',
                     help='the variable name of nanovg context')
 parser.add_argument('-d', '--dest', default=os.curdir,
@@ -54,6 +56,7 @@ def execute_from_command_line():
         result = svg_parser.get_header_file_content(basename,
                                                     args.nanovg_include_path,
                                                     args.uses_namespace,
+                                                    args.build_object,
                                                     prototype_only=True)
         if args.dest is not None:
             header_file = open('%s.h' % dest_path, 'w')
@@ -63,7 +66,8 @@ def execute_from_command_line():
         result = svg_parser.get_source_file_content(basename,
                                                     args.nanovg_include_path,
                                                     args.uses_namespace,
-                                                    args.include_path)
+                                                    args.include_path,
+                                                    args.build_object)
         if args.dest is not None:
             source_file = open('%s.cc' % dest_path, 'w')
             source_file.write(result)
@@ -72,6 +76,7 @@ def execute_from_command_line():
         result = svg_parser.get_header_file_content(args.svg_path,
                                                     args.nanovg_include_path,
                                                     args.uses_namespace,
+                                                    args.build_object,
                                                     prototype_only=False)
         if args.dest is not None:
             header_file = open('%s.h' % dest_path, 'w')

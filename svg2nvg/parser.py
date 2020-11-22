@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -44,6 +45,10 @@ def attribute(method):
         return result
     return inner
 
+def extract_number_from_string(str):
+    result = re.search(r'\d+', str)
+    return result[0] if result else 0
+
 def element(method):
     """Decorator for parsing a element.
 
@@ -52,10 +57,10 @@ def element(method):
     """
     def inner(*args, **kwargs):
         self = args[0]
-        element_tag = get_element_tag(args[1])
-        self.generator.begin_element(element_tag)
+        element = args[1]
+        self.begin_element(element)
         method(*args, **kwargs)
-        self.generator.end_element(element_tag)
+        self.end_element(element)
     return inner
 
 def get_element_tag(element):
@@ -68,6 +73,7 @@ class SVGParser(object):
     def __init__(self, context='context'):
         self.context = context
         self.stmts = list()
+        self.styles = list()
 
     @attribute
     def __parse_bounds(self, element):
@@ -86,6 +92,7 @@ class SVGParser(object):
 
     def __parse_element(self, element):
         tag = get_element_tag(element)
+        print("TAG: %s" % tag)
         if tag in ignored_tags:
             return
 
@@ -108,10 +115,12 @@ class SVGParser(object):
     @attribute
     def __parse_fill(self, element):
         args = dict()
-        if 'fill' not in element.attrib:
-            fill = '#000000'
-        else:
+        if 'fill' in element.attrib:
             fill = element.attrib['fill']
+        else:
+            fill = self.__parse_style(element, 'fill')
+
+        print("FILL:", fill)
         if fill == 'none' or fill == 'transparent':
             return args
 
@@ -253,26 +262,46 @@ class SVGParser(object):
     @attribute
     def __parse_stroke(self, element):
         args = dict()
-        if 'stroke' not in element.attrib:
-            return dict()
-        stroke = element.attrib['stroke']
-        if stroke == 'none' or stroke == 'transparent':
-            return dict()
+        if 'stroke' in element.attrib:
+            stroke = element.attrib['stroke']
+        else:
+            stroke = self.__parse_style(element, 'stroke')
+
+        # if stroke == 'none' or stroke == 'transparent':
+        #     return dict()
+        # if stroke != 'none' and stroke != 'transparent':
         args['stroke'] = stroke
         args['stroke-opacity'] = float(element.attrib.get('opacity', 1)) * \
                                  float(element.attrib.get('stroke-opacity', 1))
 
-        for attrib in ['linecap', 'linejoin', 'miterlimit']:
+        for attrib in ['linecap', 'linejoin', 'miterlimit', 'width']:
             attrib = 'stroke-%s' % attrib
             if attrib in element.attrib:
                 args[attrib] = element.attrib[attrib]
+            else:
+                value = self.__parse_style(element, attrib)
+                if value != 'none':
+                    args[attrib] = value
 
-        if 'stroke-width' in element.attrib:
-            args['stroke-width'] = element.attrib['stroke-width']
-            if float(args['stroke-width']) < 1:
-                return dict()
+        if 'stroke-width' in args:
+            numbers = re.findall(r"[-+]?\d*\.\d+|\d+", args['stroke-width'])
+            if numbers:
+                args['stroke-width'] = numbers[0]
 
+        if 'stroke-width' in args and float(args['stroke-width']) < 1:
+            return dict()
+
+        print("Stroke:", args)
         return args
+
+    def __parse_style(self, element, name):
+        if 'style' in element.attrib:
+            style = element.attrib['style']
+            print("--- STYLE: ", style)
+            match = re.search(r'%s:(.*?);' % name, style)
+            if match:
+                return match.group(1)
+        return 'none'
 
     @attribute
     def __parse_transform(self, element):
@@ -299,17 +328,30 @@ class SVGParser(object):
         self.generator = generator.Generator(self.stmts, self.context)
         self.group_attrib = list()
 
+        self.begin_element(root)
         for child in root:
             self.__parse_element(child)
+        self.end_element(root)
+
+    def begin_element(self, element):
+        tag = get_element_tag(element)
+        print("BEGIN <%s>\n" % tag)
+        self.generator.begin_element(tag)
+
+    def end_element(self, element):
+        tag = get_element_tag(element)
+        print("END <%s>\n" % tag)
+        self.generator.end_element(tag)
 
     def get_content(self):
         return '\n'.join(self.stmts)
 
     def get_header_file_content(self, filename, nanovg_include_path,
-                                uses_namespace=False, prototype_only=False):
+                                uses_namespace=False, builds_object=False,
+                                prototype_only=False):
         basename = os.path.splitext(os.path.basename(filename))[0]
         guard_constant = 'SVG2NVG_%s_H_' % basename.upper()
-        function_name = 'Render%s' % basename.title().replace('_', '')
+        title = basename.title().replace('_', '')
 
         result = '#ifndef %s\n' % guard_constant
         result += '#define %s\n\n' % guard_constant
@@ -319,14 +361,44 @@ class SVGParser(object):
 
         if uses_namespace:
             result += 'namespace svg2nvg {\n\n'
-        prototype = 'void %s(NVGcontext* %s)' % (function_name, self.context)
+
+        if builds_object:
+            function_name = 'Draw'
+#             result += '''#ifndef SVG2NVG_DRAWING_H_
+# #define SVG2NVG_DRAWING_H_
+
+# class Drawing {};
+
+# #endif  // SVG2NVG_DRAWING_H_
+
+# '''
+
+            result += 'class %s : public Drawing {\n' % title
+            result += ' public:\n'
+            # result += '  static constexpr double kWidth = %s;\n' % \
+            result += '  double GetWidth() const final { return %s; }\n' % \
+                         extract_number_from_string(self.canvas_width)
+            result += '  double GetHeight() const final { return %s; }\n\n' % \
+                         extract_number_from_string(self.canvas_height)
+            # result += '  static constexpr double  kHeight = %s;\n\n' % \
+            # result += '  static '
+        else:
+            function_name = 'Render%s' % title
+
+        prototype = '  void %s(NVGcontext *%s) const final' % \
+                    (function_name, self.context)
         if prototype_only:
-            result += '%s;\n\n' % prototype
+            result += '%s;\n' % prototype
         else:
             result += 'static %s {\n' % prototype
             for stmt in self.stmts:
                 result += '  %s\n' % stmt
-            result += '}\n\n'
+            result += '}\n'
+
+        if builds_object:
+            result += '};\n'
+
+        result += '\n'
         if uses_namespace:
             result += '}  // namespace svg2nvg\n\n'
         result += '#endif  // %s\n' % guard_constant
@@ -334,7 +406,8 @@ class SVGParser(object):
 
     def get_source_file_content(self, filename, nanovg_include_path,
                                 uses_namespace=False,
-                                header_include_path=None):
+                                header_include_path=None,
+                                builds_object=False):
         result = ''
         basename = os.path.splitext(os.path.basename(filename))[0]
         if header_include_path is None:
@@ -348,8 +421,15 @@ class SVGParser(object):
 
         if uses_namespace:
             result += 'namespace svg2nvg {\n\n'
-        function_name = 'Render%s' % basename.title().replace('_', '')
-        result += 'void %s(NVGcontext* %s) {\n' % (function_name, self.context)
+
+        title = basename.title().replace('_', '')
+        result += 'void '
+        if builds_object:
+            function_name = 'Draw'
+            result += '%s::' % title
+        else:
+            function_name = 'Render%s' % title
+        result += '%s(NVGcontext *%s) const {\n' % (function_name, self.context)
         for stmt in self.stmts:
             result += '  %s\n' % stmt
         result += '}\n\n'
