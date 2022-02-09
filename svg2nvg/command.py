@@ -36,9 +36,10 @@ parser.add_argument('-vg', '--nanovg_include_path', default='nanovg.h',
                     help='the include path for nanovg')
 parser.add_argument('--source_file', action='store_true',
                     help='generate source file')
-parser.add_argument('-ns', '--namespace', action='store_true',
-                    dest='uses_namespace',
+parser.add_argument('-ns', '--namespace', default='',
                     help='add C++ namespace to header file')
+parser.add_argument('-bc', '--baseclass', default='',
+                    help='the C++ base class to inherit from')
 
 def execute_from_command_line():
     if len(sys.argv) == 1:
@@ -52,10 +53,12 @@ def execute_from_command_line():
     basename = os.path.splitext(os.path.basename(args.svg_path))[0]
     dest_path = os.path.join(os.path.abspath(args.dest), basename)
 
+    namespaces = list()
     if args.source_file:
         result = svg_parser.get_header_file_content(basename,
                                                     args.nanovg_include_path,
-                                                    args.uses_namespace,
+                                                    args.namespace,
+                                                    args.baseclass,
                                                     args.build_object,
                                                     prototype_only=True)
         if args.dest is not None:
@@ -65,7 +68,7 @@ def execute_from_command_line():
 
         result = svg_parser.get_source_file_content(basename,
                                                     args.nanovg_include_path,
-                                                    args.uses_namespace,
+                                                    args.namespace,
                                                     args.include_path,
                                                     args.build_object)
         if args.dest is not None:
@@ -75,7 +78,8 @@ def execute_from_command_line():
     elif args.header_file:
         result = svg_parser.get_header_file_content(args.svg_path,
                                                     args.nanovg_include_path,
-                                                    args.uses_namespace,
+                                                    args.namespace,
+                                                    args.baseclass,
                                                     args.build_object,
                                                     prototype_only=False)
         if args.dest is not None:

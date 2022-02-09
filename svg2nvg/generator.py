@@ -75,7 +75,7 @@ class Generator(object):
         return stmt
 
     def begin_element(self, tag):
-        if tag not in ('g', 'linearGradient'):
+        if tag not in ('svg', 'g', 'linearGradient'):
             self.__append_stmt('BeginPath')
 
         self.previous_path_xy.append((0, 0))
@@ -123,7 +123,9 @@ class Generator(object):
             color = self.__gen_color(fill, kwargs['fill-opacity'])
             if color is not None:
                 self.__append_stmt('FillColor', color)
-        self.__append_stmt('Fill')
+
+        if fill != 'none' and fill != 'transparent':
+            self.__append_stmt('Fill')
 
     def line(self, x1, y1, x2, y2):
         self.__append_stmt('MoveTo', x1, y1)
@@ -254,7 +256,8 @@ class Generator(object):
         if 'stroke-width' in kwargs:
             self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
 
-        if calls_stroke:
+        stroke = kwargs['stroke']
+        if calls_stroke and stroke != 'none' and stroke != 'transparent':
             self.__append_stmt('Stroke')
 
     def transform(self, **kwargs):
