@@ -15,6 +15,8 @@
 import re
 import sys
 
+from svgelements import svgelements
+
 class Generator(object):
 
     def __init__(self, stmts, context='context'):
@@ -22,48 +24,15 @@ class Generator(object):
         self.stmts = stmts
         self.new_paint = True
 
-        self.previous_path_xy = []
         self.transform_counts = []
-        self.definitions = {}
 
     def __append_stmt(self, *args):
-        if len(args) == 1 and args[0] == 'FillPaint':
-            args = args + ('paint',)
-
         stmt = self.__gen_stmt(*args)
-
-        if args[0] in ('LinearGradient',):
-            if self.new_paint:
-                stmt = 'NVGpaint paint = ' + stmt
-                self.new_paint = False
-            else:
-                stmt = 'paint = ' + stmt
-
         self.stmts.append(stmt)
 
     def __append_stmts(self, stmts):
         for stmt in stmts:
             self.__append_stmt(*stmt)
-
-    def __gen_color(self, color, opacity):
-        if color == 'none' or not color or opacity == 0:
-            return None
-        opacity = round(float(opacity) * 255)
-
-        match = re.match(r'^#([0-9a-fA-F]{6})$', color)
-        if match:
-            color = match.group(1)
-            if sys.version_info[0] < 3:
-                color = tuple(ord(c) for c in color.decode('hex'))
-            else:
-                color = tuple(c for c in bytes.fromhex(color))
-        elif color == 'black':
-            color = (255, 255, 255)
-        else:
-            print("Found unknown color: %r" % color)
-            exit(1)
-        return 'nvgRGBA(%d, %d, %d, %d)' % (color[0], color[1], color[2],
-                                            opacity)
 
     def __gen_stmt(self, *args):
         command = args[0]
@@ -74,197 +43,115 @@ class Generator(object):
             stmt = 'nvg%s(%s, %s);' % (command, self.context, ', '.join(args))
         return stmt
 
-    def begin_element(self, tag):
-        if tag not in ('svg', 'g', 'linearGradient'):
-            self.__append_stmt('BeginPath')
+    def arc_to(self, x1, y1, x2, y2, radius):
+        self.__append_stmt('ArcTo', x1, y1, x2, y2, radius)
 
-        self.previous_path_xy.append((0, 0))
-        self.transform_counts.append(0)
+    def begin_path(self):
+        self.__append_stmt('BeginPath')
 
-    def begin_path_commands(self):
-        self.subpath_count = 0
-        self.previous_path = None
-        self.previous_move_point = None
+    def bezier_to(self, c1x, c1y, c2x, c2y, x, y):
+        self.__append_stmt('BezierTo', c1x, c1y, c2x, c2y, x, y)
 
-    def bounds(self, **kwargs):
-        pass
+    def circle(self, cx, cy, r):
+        self.__append_stmt('Circle', cx, cy, r)
 
-    def circle(self, **kwargs):
-        self.__append_stmt('Circle', kwargs['cx'], kwargs['cy'], kwargs['r'])
-
-    def ellipse(self, **kwargs):
-        self.__append_stmt('Ellipse', kwargs['cx'], kwargs['cy'], kwargs['rx'],
-                           kwargs['ry'])
-
-    def end_element(self, tag):
-        for i in range(self.transform_counts[-1]):
-            self.__append_stmt('Restore')
-
-        self.previous_path_xy.pop()
-        self.transform_counts.pop()
-
-    def end_path_commands(self):
-        self.previous_path = None
-
-    def fill(self, **kwargs):
-        fill = kwargs['fill']
-
-        url_match = re.match(r'^url\(#(.*)\)$', fill)
-        if url_match:
-            definition_id = url_match.group(1)
-            definition = self.definitions.get(definition_id)
-            if not definition:
-                print("Could not find definition: %r" % definition_id)
-                exit(1)
-            self.__append_stmts(definition.generate_stmts())
-            if (definition.should_restore):
-                self.transform_counts[-1] += 1
-        else:
-            color = self.__gen_color(fill, kwargs['fill-opacity'])
-            if color is not None:
-                self.__append_stmt('FillColor', color)
-
-        if fill != 'none' and fill != 'transparent':
-            self.__append_stmt('Fill')
-
-    def line(self, x1, y1, x2, y2):
-        self.__append_stmt('MoveTo', x1, y1)
-        self.__append_stmt('LineTo', x2, y2)
-
-    def path_command(self, command, *args):
-        # Converts relative coordinates to absolute coordinates.
-        if command.islower():
-            previous_x = float(self.previous_path_xy[-1][0])
-            previous_y = float(self.previous_path_xy[-1][1])
-
-            if command in ('c', 'h', 'l', 'm', 's', 'q'):
-                new_args = list()
-                for i, value in enumerate(args):
-                    previous_value = float(self.previous_path_xy[-1][i % 2])
-                    new_args.append(float(args[i]) + previous_value)
-                args = tuple(new_args)
-            elif command == 'v':
-                args = (previous_y + float(args[0]),)
-            elif command == 'z':
-                pass
-            else:
-                print("Path command %r is not implemeneted" % command)
-                exit(1)
-            command = command.upper()
-
-        # Converts 'H', 'S' and 'V' commands to other generic commands.
-        if command == 'H':
-            command = 'L'
-            args = (args[0], self.previous_path_xy[-1][1])
-        elif command == 'S':
-            if self.previous_path is None:
-                previous_command = None
-            else:
-                previous_command = self.previous_path[0]
-                previous_parameters = self.previous_path[1]
-
-            if previous_command == 'C':
-                previous_x = float(previous_parameters[4])
-                previous_y = float(previous_parameters[5])
-                previous_x2 = float(previous_parameters[2])
-                previous_y2 = float(previous_parameters[3])
-                x1 = 2 * previous_x - previous_x2
-                y1 = 2 * previous_y - previous_y2
-                command = 'C'
-                args = (x1, y1) + args
-            else:
-                print('Path command S is not implement')
-        elif command == 'V':
-            command = 'L'
-            args = (self.previous_path_xy[-1][0], args[0])
-
-        # Moves to the previous move point if the previous command is closepath.
-        if self.previous_path is not None and \
-           self.previous_move_point is not None and \
-           self.previous_path[0] == 'Z' and command != 'M':
-            self.subpath_count += 1
-            self.__append_stmt('MoveTo', self.previous_move_point)
-
-        # Handles generic commands.
-        if command == 'C':
-            self.__append_stmt('BezierTo', *args)
-            self.previous_path_xy[-1] = args[-2:]
-        elif command == 'L':
-            if self.previous_path[0] in 'ML' and \
-               args[0] == self.previous_path_xy[-1][0] and \
-               args[1] == self.previous_path_xy[-1][1]:
-                return
-            self.__append_stmt('LineTo', *args)
-            self.previous_path_xy[-1] = args
-        elif command == 'M':
-            self.subpath_count += 1
-            self.__append_stmt('MoveTo', *args)
-            self.previous_path_xy[-1] = args
-            self.previous_move_point = args
-        elif command == 'Q':
-            self.__append_stmt('QuadTo', *args)
-            self.previous_path_xy[-1] = args[-2:]
-        elif command == 'Z':
-            if self.previous_path[0] == 'M':
-                return
-            self.__append_stmt('ClosePath')
-            if self.subpath_count > 1:
-                self.__append_stmt('PathWinding', 'NVG_HOLE')
-        else:
-            print('Path command %r is not implemented: %r' % (command, args))
-            exit(1)
-        self.previous_path = (command, args)
-
-    def polygon(self, **kwargs):
-        points = [tuple(point.split(',')) for point in kwargs['points'].split()]
-        self.__append_stmt('MoveTo', *points[0])
-        for point in points[1:]:
-            self.__append_stmt('LineTo', *point)
+    def close_path(self):
         self.__append_stmt('ClosePath')
 
-    def polyline(self, **kwargs):
-        points = [tuple(point.split(',')) for point in kwargs['points'].split()]
-        self.__append_stmt('MoveTo', *points[0])
-        for point in points[1:]:
-            self.__append_stmt('LineTo', *point)
+    def ellipse(self, cx, cy, rx, ry):
+        self.__append_stmt('Ellipse', cx, cy, rx, ry)
+
+    def fill(self):
+        self.__append_stmt('Fill')
+
+    def fill_color(self, red, green, blue, alpha):
+        self.__append_stmt('FillColor', self.get_color(red, green, blue, alpha))
+
+    def fill_color(self, color):
+        color = self.get_color_by_object(color)
+        self.__append_stmt('FillColor', color)
+
+    def get_color(self, red, green, blue, alpha):
+        return 'nvgRGBA({}, {}, {}, {})'.format(red, green, blue, alpha)
+
+    def get_color_by_object(self, color):
+        if color is None or not isinstance(color, svgelements.Color) or \
+           not color.opacity:
+            return self.get_color(0, 0, 0, 0)
+        return 'nvgRGBA({}, {}, {}, {})'.format(color.red, color.green,
+                                                color.blue, color.alpha)
+
+    def line_cap(self, value):
+        if value == 'butt':
+            join = 'NVG_BUTT'
+        elif (value == 'round'):
+            join = 'NVG_ROUND'
+        elif (value == 'square'):
+            join = 'NVG_SQUARE'
+        else:
+            print(' !! Not supported value for nvgLineCap():', value)
+
+        self.__append_stmt('LineCap', join)
+
+    def line_to(self, x, y):
+        self.__append_stmt('LineTo', x, y)
+
+    def line_join(self, value):
+        if value == 'bevel':
+            join = 'NVG_BEVEL'
+        elif (value == 'miter'):
+            join = 'NVG_MITER'
+        elif (value == 'round'):
+            join = 'NVG_ROUND'
+        else:
+            print(' !! Not supported value for nvgLineJoin():', value)
+
+        self.__append_stmt('LineJoin', join)
+
+    def linear_gradient(self, sx, sy, ex, ey, scolor, ecolor):
+        paint = 'NVGpaint paint = {}'.format(
+            self.__gen_stmt('LinearGradient', sx, sy, ex, ey, scolor, ecolor))
+        self.stmts.append(paint)
+        self.__append_stmt('FillPaint', 'paint')
+        self.fill()
+
+    def miter_limit(self, limit):
+        self.__append_stmt('MiterLimit', limit)
+
+    def move_to(self, x, y):
+        self.__append_stmt('MoveTo', x, y)
+
+    def path_winding_hole(self):
+        self.__append_stmt('PathWinding', 'NVG_HOLE')
+
+    def path_winding_solid(self):
+        self.__append_stmt('PathWinding', 'NVG_SOLID')
+
+    def quad_to(self, cx, cy, x, y):
+        self.__append_stmt('QuadTo', cx, cy, x, y)
 
     def rect(self, x, y, width, height):
         self.__append_stmt('Rect', x, y, width, height)
 
-    def stroke(self, **kwargs):
-        color = self.__gen_color(kwargs['stroke'], kwargs['stroke-opacity'])
-        calls_stroke = False
-        if color is not None:
-            calls_stroke = True
-            self.__append_stmt('StrokeColor', color)
+    def restore(self):
+        self.__append_stmt('Restore')
 
-        line_caps = {'butt': 'NVG_BUTT', 'round': 'NVG_ROUND',
-                     'square': 'NVG_SQUARE'}
-        if 'stroke-linecap' in kwargs:
-            line_cap = kwargs['stroke-linecap']
-            if line_cap in line_caps:
-                self.__append_stmt('LineCap', line_caps[line_cap])
+    def save(self):
+        self.__append_stmt('Save')
 
-        if 'stroke-linejoin' in kwargs:
-            line_join = kwargs['stroke-linejoin']
-            if line_join in line_caps:
-                self.__append_stmt('LineJoin', line_caps[line_join])
+    def stroke(self):
+        self.__append_stmt('Stroke')
 
-        if 'stroke-miterlimit' in kwargs:
-            self.__append_stmt('MiterLimit', kwargs['stroke-miterlimit'])
+    def stroke_color(self, red, green, blue, alpha):
+        self.__append_stmt('StrokeColor',
+                           self.get_color(red, green, blue, alpha))
 
-        if 'stroke-width' in kwargs:
-            self.__append_stmt('StrokeWidth', kwargs['stroke-width'])
+    def stroke_color(self, color):
+        color = self.get_color_by_object(color)
+        self.__append_stmt('StrokeColor', color)
 
-        stroke = kwargs['stroke']
-        if calls_stroke and stroke != 'none' and stroke != 'transparent':
-            self.__append_stmt('Stroke')
+    def stroke_width(self, width):
+        self.__append_stmt('StrokeWidth', width)
 
-    def transform(self, **kwargs):
-        pattern = re.compile(r'^matrix\((.*)\)$')
-        match = pattern.search(kwargs['transform'])
-        if match:
-            parameters = match.group(1).split()
-            self.__append_stmt('Save')
-            self.__append_stmt('Transform', *parameters)
-            self.transform_counts[-1] += 1
+    def transform(self, a, b, c, d, e, f):
+        self.__append_stmt('Transform', a, b, c, d, e, f)

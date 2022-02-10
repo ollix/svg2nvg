@@ -48,7 +48,7 @@ def execute_from_command_line():
 
     args = parser.parse_args()
     svg_parser = SVGParser(args.context)
-    svg_parser.parse_file(args.svg_path)
+    svg_parser.parse(args.svg_path)
 
     basename = os.path.splitext(os.path.basename(args.svg_path))[0]
     dest_path = os.path.join(os.path.abspath(args.dest), basename)
